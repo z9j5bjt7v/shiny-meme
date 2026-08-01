@@ -1,0 +1,52 @@
+name: Sky Miner Bot
+
+on:
+  push:
+    branches: [ "main" ]    # <--- Added this so it runs on upload
+  workflow_dispatch:        # Keeps your manual button
+  schedule:
+    - cron: '*/20 * * * *'   # Runs automatically every 20 minutes
+
+jobs:
+  run-miner:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        bot_id: [1, 2, 3, 4, 5]
+      fail-fast: false
+    
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Python dependencies
+        run: pip install selenium requests packaging
+
+      - name: Install Chrome & ChromeDriver
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Fix chromedriver path
+        run: |
+          DRIVER_PATH=$(which chromedriver 2>/dev/null || echo "")
+          if [ -z "$DRIVER_PATH" ]; then
+            echo "ERROR: chromedriver not found in PATH"
+            which chromedriver || true
+            find / -name "chromedriver" 2>/dev/null | head -5
+            exit 1
+          fi
+          sed -i "s|/usr/local/bin/chromedriver|$DRIVER_PATH|g" main.py
+          echo "Chromedriver path: $DRIVER_PATH"
+
+      - name: Run bot
+        timeout-minutes: 340
+        env:
+          GH_USERNAME: ${{ github.repository_owner }}
+          GH_REPO: ${{ github.event.repository.name || github.event.repository.full_name || github.repository }}
+          BOT_LABEL: "BOT${{ matrix.bot_id }}"
+          DASHBOARD_URL: "http://172.104.49.108:3000"
+        run: python main.py
